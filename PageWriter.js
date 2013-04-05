@@ -1,6 +1,7 @@
 var File = require('raptor/files/File'),
     templating = require('raptor/templating'),
-    promises = require('raptor/promises');
+    promises = require('raptor/promises'),
+    logger = require('raptor/logging').logger('raptor-static-website');
 
 var PageWriter = function(config) {
     this.baseTemplatesDir = config.baseTemplatesDir;
@@ -40,7 +41,7 @@ PageWriter.prototype = {
             var outputFile = new File(baseOutputDir, page.outputPath);
             templateData = templateData || {};
             templateData.pageName = page.name;
-            templateData.pageOutputPath = outputFile.getAbsolutePath();
+            templateData.pageOutputPath = outputFile.getParent();
 
             var template = page.templateResourcePath || page.templateFile;
             //if (this.modulesDir)
@@ -58,6 +59,7 @@ PageWriter.prototype = {
             outputFile.writeAsString(context.getOutput());
 
             _this.writtenPages.push(page);
+            logger.info("Page written: " + outputFile.getAbsolutePath());
         }
 
         var promise;

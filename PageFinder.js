@@ -32,10 +32,13 @@ var PageFinder = function(config) {
     }
     this.basePagesDir = basePagesDir;
     this.resourceSearchPathDir = config.resourceSearchPathDir;
+    this.singlePage = config.singlePage;
 };
 
 PageFinder.prototype = {
     findPages: function() {
+
+
         var foundPages = [],
             basePagesDirPath = this.basePagesDir.getAbsolutePath(),
             resourceSearchPathDir = this.resourceSearchPathDir;
@@ -99,19 +102,74 @@ PageFinder.prototype = {
             });
         }
 
-        require('raptor/files/walker').walk(
-            this.basePagesDir, 
-            function(file) {
-                if (file.isDirectory()) {
-                    for (var i=0, len=templateFinders.length; i<len; i++) {
-                        var templateFile = templateFinders[i](file);
-                        if (templateFile && templateFile.exists()) {
-                            handlePage(templateFile);    
-                        }
+        function findTemplateFile(dir) {
+            for (var i=0, len=templateFinders.length; i<len; i++) {
+                var templateFile = templateFinders[i](dir);
+                if (templateFile && templateFile.exists()) {
+                    return templateFile;
+                    
+                }
+            }
+            return null;
+        }
+
+        if (this.singlePage) {
+            var pagePath = this.singlePage;
+            var templateFile;
+
+            if (pagePath.endsWith('.rhtml')) {
+                var templatePath = pagePath;
+                templateFile = new File(path.resolve(process.cwd(), templatePath));
+                if (templateFile.exists()) {
+                    // See if the template file is an absolute path
+                    handlePage(templateFile);
+                }
+                else {
+                    if (templatePath.startsWith('/')) {
+                        templatePath = templatePath.substring(1);
+                    }
+                    // Try the template as path relative to the base pages directory
+                    templateFile = new File(this.basePagesDir, templatePath);
+                    if (templateFile.exists()) {
+                        handlePage(templateFile);
+                    }
+                    else {
+                        throw new Error("Invalid page: " + this.singlePage);
                     }
                 }
-            },
-            this);
+            }
+            else {
+                if (pagePath.startsWith('/')) {
+                    pagePath = pagePath.substring(1);
+                }
+                var pageDir = new File(this.basePagesDir, pagePath);
+                if (pageDir.exists()) {
+                    templateFile = findTemplateFile(pageDir);    
+                }
+                
+                if (templateFile) {
+                    handlePage(templateFile);
+                }
+                else {
+                    throw new Error("Invalid page: " + this.singlePage);
+                }
+            }
+        }
+        else
+        {
+            require('raptor/files/walker').walk(
+                this.basePagesDir, 
+                function(file) {
+                    if (file.isDirectory()) {
+                        var templateFile = findTemplateFile(file);
+                        if (templateFile) {
+                            handlePage(templateFile);
+                        }
+                    }
+                },
+                this);
+        }
+            
 
         return foundPages;
     }
