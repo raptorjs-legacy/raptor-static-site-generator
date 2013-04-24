@@ -1,6 +1,6 @@
 {
   "name": "raptor-static-site-generator",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Node module to support generating static websites using the power of RaptorJS",
   "main": "lib/index.js",
   "scripts": {
