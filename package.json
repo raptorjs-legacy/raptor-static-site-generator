@@ -1,14 +1,14 @@
 {
-  "name": "raptor-static-website",
+  "name": "raptor-static-site-generator",
   "version": "0.2.0",
-  "description": "Node module to support publishing static websites based on Raptor Templates",
+  "description": "Node module to support generating static websites using the power of RaptorJS",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/raptorjs/raptor-static-website.git"
+    "url": "https://github.com/raptorjs/raptor-static-site-generator.git"
   },
   "keywords": [
     "static",
