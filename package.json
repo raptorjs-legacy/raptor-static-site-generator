@@ -1,6 +1,6 @@
 {
   "name": "raptor-static-website",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Node module to support publishing static websites based on Raptor Templates",
   "main": "index.js",
   "scripts": {
@@ -19,7 +19,7 @@
   "author": "Patrick Steele-Idem <psteeleidem@ebay.com>",
   "readmeFilename": "README.md",
   "dependencies": {
-    
+    "path-filters": "~1.0.3"
   },
   "devDependencies": {
     "raptor": "~2.3.7",

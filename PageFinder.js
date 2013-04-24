@@ -1,23 +1,19 @@
-var path = require('path'),
+var nodePath = require('path'),
     File = require('raptor/files/File'),
-    templating = require('raptor/templating'),
+    pathFilters = require('path-filters'),
     templateFinders = [
-        function(dir) {
-            return new File(dir, "index.rhtml");
+        function(dir, ext) {
+            return new File(dir, "index." + ext);
         },
-        function(dir) {
-            return new File(dir, dir.getName() + '.rhtml');
+        function(dir, ext) {
+            return new File(dir, dir.getName() + '.' + ext);
         },
-        function(dir) {
+        function(dir, ext) {
             var files = dir.listFiles();
             for (var i=0,len=files.length; i<len; i++) {
-                var file = files[i],
-                    filename = file.getName();
+                var file = files[i];
 
-                if (filename.startsWith('index-') && filename.endsWith('.rhtml')) {
-                    return file;
-                }
-                else if (filename.endsWith('-index.rhtml')) {
+                if (file.getExtension() === ext) {
                     return file;
                 }
             }
@@ -25,34 +21,90 @@ var path = require('path'),
         }
     ];
 
-var PageFinder = function(config) {
-    var basePagesDir = config.basePagesDir;
-    if (typeof basePagesDir === 'string') {
-        basePagesDir = new File(path.resolve(process.cwd(), basePagesDir));
-    }
-    this.basePagesDir = basePagesDir;
-    this.resourceSearchPathDir = config.resourceSearchPathDir;
-    this.singlePage = config.singlePage;
+var PageFinder = function() {
+    this._baseDir = null;
+    this._resourceSearchPathDir = undefined;
+    this._singlePage = null;
+    this._includes = pathFilters.create();
+    this._excludes = pathFilters.create();
+    this._templateExtensions = {};
+    this.templateExtension("rhtml");
+
 };
 
 PageFinder.prototype = {
+    templateExtension: function(ext) {
+        this._templateExtensions[ext] = true;
+        return this;
+    },
+
+    resourceSearchPathDir: function(path) {
+        this._resourceSearchPathDir = path;
+        return this;
+    },
+
+    include: function(filter) {
+        this._includes.add(filter);
+        return this;
+    },
+
+    exclude: function(filter) {
+        this._excludes.add(filter);
+        return this;
+    },
+
+    singlePage: function(pageName) {
+        this._singlePage = pageName;
+        return this;
+    },
+
+    baseDir: function(path) {
+        this._baseDir = path;
+        return this;
+    },    
+
     findPages: function() {
-
-
-        var foundPages = [],
-            basePagesDirPath = this.basePagesDir.getAbsolutePath(),
-            resourceSearchPathDir = this.resourceSearchPathDir;
-
-        
-        if (resourceSearchPathDir === undefined) {
-            var searchPath = require('raptor/resources').getSearchPath();
-            if (searchPath.hasDir(basePagesDirPath)) {
-                resourceSearchPathDir = basePagesDirPath;
+        var baseDir = this._baseDir;
+        if (baseDir) {
+            if (typeof baseDir === 'string') {
+                baseDir = new File(nodePath.resolve(process.cwd(), baseDir));
             }
         }
 
-        function handlePage(templateFile) {
-            var relativePath = templateFile.getParent().substring(basePagesDirPath.length),
+
+
+        var foundPages = [];
+        var baseDirPath = baseDir.getAbsolutePath();
+        var resourceSearchPathDir = this._resourceSearchPathDir;
+        var excludes = this._excludes;
+        var includes = this._includes;
+        var singlePage = this._singlePage;
+        var templateExtensionsLookup = this._templateExtensions;
+        var templateExtensions = Object.keys(templateExtensionsLookup);
+        
+        if (resourceSearchPathDir === undefined) {
+            var searchPath = require('raptor/resources').getSearchPath();
+            searchPath.forEachEntry(function(entry) {
+                if (entry.getDir) {
+                    var searchPathDir = '' + entry.getDir();
+                    if (baseDirPath.startsWith(searchPathDir)) {
+                        resourceSearchPathDir = searchPathDir;
+                    }
+                }
+            }, this);
+        }
+
+        function handleTemplate(templateFile) {
+            var path = templateFile.getAbsolutePath();
+            if (excludes.hasMatch(path)) {
+                return;
+            }
+
+            if (!includes.hasMatch(path) && (!includes.isEmpty() || !excludes.isEmpty())) {
+                return;
+            }
+
+            var relativePath = templateFile.getParent().substring(baseDirPath.length),
                 pageName,
                 pathParts,
                 pageName,
@@ -78,7 +130,7 @@ PageFinder.prototype = {
             }
 
             var templatePath = templateFile.getAbsolutePath();
-            var controllerPath = templatePath.slice(0, 0-".rhtml".length) + "-controller.js";
+            var controllerPath = nodePath.join(templateFile.getParent(), templateFile.getNameWithoutExtension() + '-controller.js');
 
             var controllerFile = new File(controllerPath);
             if (!controllerFile.exists()) {
@@ -103,38 +155,46 @@ PageFinder.prototype = {
         }
 
         function findTemplateFile(dir) {
+
             for (var i=0, len=templateFinders.length; i<len; i++) {
-                var templateFile = templateFinders[i](dir);
-                if (templateFile && templateFile.exists()) {
-                    return templateFile;
+                for (var j=0; j<templateExtensions.length; j++) {
                     
+
+                    var templateFile = templateFinders[i](dir, templateExtensions[j]);
+                    if (templateFile && templateFile.exists()) {
+                        return templateFile;
+                        
+                    }  
                 }
+                
             }
             return null;
         }
 
-        if (this.singlePage) {
-            var pagePath = this.singlePage;
+        if (singlePage) {
+            var pagePath = singlePage;
             var templateFile;
 
-            if (pagePath.endsWith('.rhtml')) {
+            var lastDot = pagePath.lastIndexOf('.');
+
+            if (lastDot !== -1 && templateExtensionsLookup.hasOwnProperty(pagePage.substring(lastDot+1))) {
                 var templatePath = pagePath;
-                templateFile = new File(path.resolve(process.cwd(), templatePath));
+                templateFile = new File(nodePath.resolve(process.cwd(), templatePath));
                 if (templateFile.exists()) {
                     // See if the template file is an absolute path
-                    handlePage(templateFile);
+                    handleTemplate(templateFile);
                 }
                 else {
                     if (templatePath.startsWith('/')) {
                         templatePath = templatePath.substring(1);
                     }
                     // Try the template as path relative to the base pages directory
-                    templateFile = new File(this.basePagesDir, templatePath);
+                    templateFile = new File(baseDir, templatePath);
                     if (templateFile.exists()) {
-                        handlePage(templateFile);
+                        handleTemplate(templateFile);
                     }
                     else {
-                        throw new Error("Invalid page: " + this.singlePage);
+                        throw new Error("Invalid page: " + singlePage);
                     }
                 }
             }
@@ -142,28 +202,31 @@ PageFinder.prototype = {
                 if (pagePath.startsWith('/')) {
                     pagePath = pagePath.substring(1);
                 }
-                var pageDir = new File(this.basePagesDir, pagePath);
+                var pageDir = new File(baseDir, pagePath);
                 if (pageDir.exists()) {
                     templateFile = findTemplateFile(pageDir);    
                 }
                 
                 if (templateFile) {
-                    handlePage(templateFile);
+                    handleTemplate(templateFile);
                 }
                 else {
-                    throw new Error("Invalid page: " + this.singlePage);
+                    throw new Error("Invalid page: " + singlePage);
                 }
             }
         }
         else
         {
+
             require('raptor/files/walker').walk(
-                this.basePagesDir, 
+                baseDir, 
                 function(file) {
                     if (file.isDirectory()) {
+
                         var templateFile = findTemplateFile(file);
+
                         if (templateFile) {
-                            handlePage(templateFile);
+                            handleTemplate(templateFile);
                         }
                     }
                 },
